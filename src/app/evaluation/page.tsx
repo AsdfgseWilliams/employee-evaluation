@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Question from '@/components/Question';
-import { evaluadosTokens } from '@/utils/generateToken';
+import { evaluados } from '@/utils/generateToken';  // Importa la lista de evaluados
 import { saveEvaluation } from '@/utils/save-evaluations';
 
 // Tipo de respuesta almacenada
@@ -11,21 +11,22 @@ interface Answer {
   answer: string | number;
 }
 
+
 export default function EvaluationPage() {
   const [token, setToken] = useState<string | null>(null);
   const [currentEvaluadoIndex, setCurrentEvaluadoIndex] = useState<number>(0);
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [interactionLevel, setInteractionLevel] = useState<number | null>(null);
-  // Cargar el token correspondiente al evaluado actual
+
+  // Cargar el token correspondiente al evaluado actual (utilizando el índice actual)
   useEffect(() => {
-    const evaluado = evaluadosTokens[currentEvaluadoIndex];
-    setToken(evaluado.token);
+    const currentEvaluado = evaluados[currentEvaluadoIndex];  // Obtenemos el nombre del evaluado
+    const token = localStorage.getItem(currentEvaluado);  // Suponiendo que los tokens se almacenan en el localStorage
+    setToken(token);  // Asignamos el token al estado
   }, [currentEvaluadoIndex]);
 
-  if (!token) {
-    return <div className="text-center text-xl">Loading...</div>;
-  }
+ 
 
   // Definición de preguntas
   const questions: { question: string; type: 'numeric' | 'text'; options: number[] | string[] }[] = [
@@ -63,34 +64,39 @@ export default function EvaluationPage() {
       goToNextEvaluado();
       return;
     }
-
+  
     const unansweredQuestions = questions.filter((q) => !answers.some((a) => a.question === q.question));
     if (unansweredQuestions.length > 0) {
       setError("Por favor, responde todas las preguntas antes de enviar.");
       return;
     }
-
+  
     setError(null);
-    const currentEvaluado = evaluadosTokens[currentEvaluadoIndex];
-
+    const currentEvaluado = evaluados[currentEvaluadoIndex];
+  
     await Promise.all(
-      answers.map(({ question, answer }) =>
-        saveEvaluation({
-          evaluadoName: currentEvaluado.name,
+      answers.map(({ question, answer }) => {
+        // Combinar el nivel de interacción con la respuesta
+        const formattedAnswer =
+          typeof answer === 'number' ? `Interaccion->${interactionLevel}----Respuesta->${answer}` : `Interaccion->${interactionLevel}----Respuesta->${answer}`;
+  
+        return saveEvaluation({
+          evaluadoName: currentEvaluado,
           token,
           question,
-          answer,
-        })
-      )
+          answer: formattedAnswer,
+        });
+      })
     );
-
+  
     alert("Respuestas enviadas correctamente.");
     goToNextEvaluado();
   };
+  
 
   // Avanzar al siguiente evaluado
   const goToNextEvaluado = () => {
-    if (currentEvaluadoIndex < evaluadosTokens.length - 1) {
+    if (currentEvaluadoIndex < evaluados.length - 1) {
       setCurrentEvaluadoIndex(currentEvaluadoIndex + 1);
       setInteractionLevel(null);
       setAnswers([]);
@@ -99,19 +105,18 @@ export default function EvaluationPage() {
       alert("Has completado todas las evaluaciones.");
     }
   };
-  
 
   return (
     <div className="min-h-screen mx-auto p-8 bg-gradient-to-r from-teal-400 to-blue-500 shadow-lg rounded-lg text-white">
       <h1 className="text-4xl font-extrabold text-center mb-6">Evaluación Anónima</h1>
       <p className="text-lg text-center mb-6">
-        Por favor, responde a las siguientes preguntas sobre <strong>{evaluadosTokens[currentEvaluadoIndex]?.name}</strong>.
+        Por favor, responde a las siguientes preguntas sobre <strong>{evaluados[currentEvaluadoIndex]}</strong>.
       </p>
 
       {interactionLevel === null ? (
         <div className="bg-white p-6 rounded-lg shadow-md text-black">
           <Question
-            question={`¿Cuánta interacción tienes con ${evaluadosTokens[currentEvaluadoIndex]?.name}?`}
+            question={`¿Cuánta interacción tienes con ${evaluados[currentEvaluadoIndex]}?`}
             options={Array.from({ length: 10 }, (_, i) => i + 1) as number[]}
             type="numeric"
             onAnswer={(answer) => handleAnswer("Nivel de interacción con la persona", answer, 'numeric')}
@@ -133,7 +138,7 @@ export default function EvaluationPage() {
             <div key={index} className="bg-white p-6 rounded-lg shadow-md text-black">
               <Question
                 question={q.question}
-                options={q.options as number[] | string[]}
+                options={q.options as number[] | []}
                 type={q.type}
                 onAnswer={(answer) => handleAnswer(q.question, answer, q.type)}
               />
@@ -147,7 +152,7 @@ export default function EvaluationPage() {
             Enviar respuestas
           </button>
         </div>
-      )}    
+      )}
     </div>
   );
 }
